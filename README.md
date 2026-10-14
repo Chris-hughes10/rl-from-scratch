@@ -1,0 +1,75 @@
+# RL training for LLM agents: verl + Agent Lightning, hands on
+
+Two notebooks that take apart how [verl](https://github.com/volcengine/verl) and
+[Agent Lightning](https://github.com/microsoft/agent-lightning) train an LLM agent with reinforcement learning, using
+Agent Lightning's Calc-X example (an AutoGen agent with an MCP calculator tool).
+
+Read them in this order:
+
+1. [tutorial/rl_training_walkthrough.ipynb](tutorial/rl_training_walkthrough.ipynb): top-down. One complete RL step
+   done by hand with the real components (vLLM, the Agent Lightning Gateway and Controller, the real agent), from
+   rollouts to `DataProto`, GRPO advantages and a PPO update, then a short run of the real trainer.
+2. [tutorial/verl_from_scratch.ipynb](tutorial/verl_from_scratch.ipynb): bottom-up. GRPO in plain PyTorch, then
+   vLLM, `DataProto`, verl's algorithm functions, Ray and worker groups are swapped in one at a time, ending with
+   plain verl and verl + Agent Lightning side by side.
+
+Both need one GPU with about 80 GB of memory.
+
+## Layout
+
+```
+tutorial/                  the two notebooks
+examples/calc_x/           Calc-X agent and training entrypoint, copied from Agent Lightning v1.0.2
+scripts/setup_verl.sh      installs the verl GPU stack (from Agent Lightning, plus a prebuilt flash-attn option)
+debug/rollout_step.py      one rollout + training batch without Ray, for stepping through in a debugger
+tools/                     generator for verl_from_scratch.ipynb, and CPU-only checks of its pure-Python cells
+azureml/                   AzureML jobs: Calc-X training, and end-to-end execution of the from-scratch notebook
+Makefile, config.env       AzureML / Docker commands (`make help`)
+run_calc_x_local.sh        full Calc-X training run on this machine, without W&B
+```
+
+`agentlightning` itself is installed from PyPI (`agentlightning==1.0.2`). The agent doesn't need it at all: it only
+reads its OpenAI base URL and reward endpoint from the environment.
+
+## Setup
+
+Requires [uv](https://docs.astral.sh/uv/), an NVIDIA driver supporting CUDA 13.0, and Python 3.12.
+
+```bash
+uv sync                                   # agentlightning, the Calc-X agent's deps, notebook deps
+bash scripts/setup_verl.sh 0.8.0 cu130    # verl 0.8.0, vLLM 0.22, torch cu130; builds flash-attn (10-30 min)
+#   or, with a prebuilt wheel (see azureml/README.md, `make flash-attn-wheel`):
+#   FLASH_ATTN_WHEEL=azureml/calc_x/environment/wheels/flash_attn-2.8.3-cp312-cp312-linux_x86_64.whl bash scripts/setup_verl.sh 0.8.0 cu130
+
+# Optional: pin to the exact package set the notebooks were verified with (also used by the AzureML image)
+uv pip install --no-deps -r azureml/calc_x/environment/requirements.txt \
+    --extra-index-url https://download.pytorch.org/whl/cu130 --index-strategy unsafe-best-match
+
+# Jupyter kernel the notebooks expect
+.venv/bin/python -m ipykernel install --user --name agl-rl-tutorials --display-name "Python (agl-rl-tutorials .venv)"
+```
+
+Don't re-run `uv sync` after `setup_verl.sh`: it would remove the GPU stack, which isn't in `pyproject.toml`.
+
+Download the Calc-X dataset into `examples/calc_x/data/` as described in
+[examples/calc_x/README.md](examples/calc_x/README.md).
+
+## Running
+
+Open a notebook with the "Python (agl-rl-tutorials .venv)" kernel and run it top to bottom. The notebooks start and
+stop their own background services (vLLM, the Gateway, the Controller).
+
+Full Calc-X training (a few hours on one GPU): `./run_calc_x_local.sh`. AzureML: see
+[azureml/README.md](azureml/README.md).
+
+After editing `tools/build_verl_from_scratch.py`, regenerate the notebook and check it without a GPU:
+
+```bash
+.venv/bin/python tools/build_verl_from_scratch.py tutorial/verl_from_scratch.ipynb
+CUDA_VISIBLE_DEVICES="" .venv/bin/python tools/cpu_check.py
+```
+
+## License
+
+`examples/calc_x/` and `scripts/setup_verl.sh` come from Agent Lightning and are under its MIT license
+([LICENSE-agent-lightning](LICENSE-agent-lightning)).

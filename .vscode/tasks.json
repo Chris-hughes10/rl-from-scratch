@@ -1,0 +1,33 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "AGL: vLLM (Qwen2.5-1.5B)",
+      "detail": "Standalone vLLM server standing in for verl's rollout replica. Leave running between debug sessions.",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/vllm",
+      "args": [
+        "serve", "Qwen/Qwen2.5-1.5B-Instruct",
+        "--host", "127.0.0.1",
+        "--port", "8000",
+        "--gpu-memory-utilization", "0.3",
+        "--max-model-len", "8192",
+        "--enable-auto-tool-choice",
+        "--tool-call-parser", "hermes",
+        "--generation-config", "vllm"
+      ],
+      "isBackground": true,
+      "options": { "env": { "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}" } },
+      "problemMatcher": {
+        "owner": "vllm",
+        "pattern": { "regexp": "^__never_matches__$" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "vLLM API server version",
+          "endsPattern": "Application startup complete"
+        }
+      },
+      "presentation": { "panel": "dedicated", "reveal": "always" }
+    }
+  ]
+}

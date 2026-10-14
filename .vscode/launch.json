@@ -1,0 +1,73 @@
+{
+  // Debug sandbox for Agent Lightning: every component runs in its own debuggable process, no Ray.
+  // 1) Run task "AGL: vLLM (Qwen2.5-1.5B)" once (Terminal > Run Task) and leave it running.
+  // 2) Start "AGL: Sandbox (all three)". Set breakpoints first; the stand-in starts the rollout step.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "AGL: Gateway (agl-server)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "agentlightning.server",
+      "args": [
+        "host=127.0.0.1",
+        "port=8181",
+        "key=dummy",
+        "default_proxy.model_name=Qwen/Qwen2.5-1.5B-Instruct",
+        "hydra.run.dir=/tmp/agl-debug/hydra/server",
+        "hydra.output_subdir=null"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "AGL: Controller (local runner + agent subprocesses)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "agentlightning.controller",
+      "args": [
+        "runner_type=local",
+        "agl_server.url=http://127.0.0.1:8181",
+        "agl_server.key=dummy",
+        "local_runner.poll_interval=1",
+        "hydra.run.dir=/tmp/agl-debug/hydra/controller",
+        "hydra.output_subdir=null"
+      ],
+      // Same layout as run_local.sh: agents import `examples.calc_x.calc_agent` (repo root) and `eval_utils` (cwd),
+      // and the agent launches its MCP calculator as plain `python`, so the venv must be first on PATH.
+      "cwd": "${workspaceFolder}/examples/calc_x",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}",
+        "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}"
+      },
+      // Attach the debugger to each spawned agent process too, so breakpoints in calc_agent.py hit.
+      "subProcess": true,
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "AGL: Trainer stand-in (one rollout step)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/debug/rollout_step.py",
+      "args": ["--num-questions", "2", "--rollout-n", "4"],
+      "cwd": "${workspaceFolder}",
+      "env": { "PYTHONPATH": "${workspaceFolder}" },
+      "console": "integratedTerminal",
+      // false lets you step from Agent Lightning into verl (e.g. compute_advantage).
+      "justMyCode": false
+    }
+  ],
+  "compounds": [
+    {
+      "name": "AGL: Sandbox (all three)",
+      "configurations": [
+        "AGL: Gateway (agl-server)",
+        "AGL: Controller (local runner + agent subprocesses)",
+        "AGL: Trainer stand-in (one rollout step)"
+      ],
+      "stopAll": true
+    }
+  ]
+}

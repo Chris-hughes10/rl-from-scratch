@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Calc-X dataset: download it (see examples/calc_x/README.md)
+examples/calc_x/data/*
+!examples/calc_x/data/sample.jsonl
+
+# training outputs
+examples/calc_x/metrics_log/
+examples/calc_x/tensorboard_log/
+examples/calc_x/checkpoints/
+outputs/
+wandb/
+
+# AzureML: prebuilt flash-attn wheel (too large for git) and per-run code snapshots
+azureml/*/environment/wheels/
+azureml/isolated_runs/

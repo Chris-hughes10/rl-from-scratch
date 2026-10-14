@@ -1,0 +1,27 @@
+[project]
+name = "agl-rl-tutorials"
+version = "0.1.0"
+description = "Hands-on notebooks for RL training of LLM agents with verl and Agent Lightning, using the Calc-X example"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "agentlightning==1.0.2",
+    # Calc-X agent (examples/calc_x)
+    "autogen-agentchat",
+    "autogen-ext[openai]",
+    "mcp>=1.11.0,<2",
+    "mcp-server-calculator",
+    "openai",
+    "httpx",
+    "sympy",
+    # notebooks
+    "ipykernel",
+    "matplotlib",
+    "pandas",
+    "pyarrow",
+    "nbclient",
+    "nbformat",
+]
+
+[tool.uv]
+package = false

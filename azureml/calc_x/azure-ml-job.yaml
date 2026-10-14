@@ -1,0 +1,55 @@
+# Tells Azure ML what kind of YAML this is.
+#  Docs: https://learn.microsoft.com/en-us/azure/machine-learning/reference-yaml-job-command
+$schema: https://azuremlschemas.azureedge.net/latest/commandJob.schema.json
+
+# Name of the experiment where all jobs will end up in the Azure ML dashboard
+experiment_name: calc-x-grpo
+description: >-
+  GRPO training of Qwen2.5-1.5B-Instruct on Calc-X with verl + Agent Lightning: an AutoGen agent with an MCP
+  calculator tool, rewarded 1/0 on the final answer. Recipe: examples/calc_x/train_calc_agent.py.
+tags:
+  model: Qwen/Qwen2.5-1.5B-Instruct
+  agentlightning: 1.0.2
+  verl: 0.8.0
+
+# What to run.
+# Smoke test: make job exp=calc_x job-xargs="--set inputs.overrides='trainer.total_training_steps=2' inputs.val_file=test_mini.parquet"
+command: >-
+  bash run_job.sh ${{inputs.data}} ${{outputs.checkpoints}}
+  --val-file ${{inputs.data}}/${{inputs.val_file}}
+  trainer.n_gpus_per_node=${{inputs.n_gpus}}
+  ${{inputs.overrides}}
+
+inputs:
+  # Created with `make data exp=calc_x`
+  data:
+    type: uri_folder
+    path: azureml:calc-x@latest
+    mode: download
+  # test.parquet: 500 questions; test_mini.parquet: 20 questions, for smoke tests
+  val_file: test.parquet
+  # GPUs per node: verl runs one vLLM replica and one FSDP shard per GPU
+  n_gpus: 2
+  # Extra verl overrides, space-separated. The default is the recipe's own value (2 epochs = 512 steps).
+  overrides: trainer.total_epochs=2
+
+outputs:
+  # verl checkpoints (about 19 GB each, actor + optimizer state); only the latest is kept
+  checkpoints:
+    type: uri_folder
+    mode: rw_mount
+
+# What code to make available: the folder `make job` isolates (agentlightning/, examples/calc_x/, run_job.sh)
+code: .
+
+# Where to run it. The path is relative to the isolated run folder (azureml/isolated_runs/<run_name>/)
+environment:
+  build:
+    path: ../../calc_x/environment
+
+resources:
+  instance_count: 1
+  # Ray's object store lives in /dev/shm
+  shm_size: 64g
+
+compute: azureml:h1002-pi

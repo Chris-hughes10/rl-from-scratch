@@ -41,7 +41,7 @@ This notebook does the same for RL training of LLMs. Each stage ends with a **wo
 
 **Prerequisites.** This notebook builds on [rl_training_walkthrough.ipynb](rl_training_walkthrough.ipynb), which dissects the finished system top-down. Log-probs, GRPO advantages, the PPO-clip objective and the Gateway's role are explained there, and only recapped here.
 
-**Hardware and time.** One GPU with about 80 GB, and roughly an hour end to end, mostly in §2 and §9. The policy is `Qwen2.5-0.5B-Instruct`, small enough that every stage trains in minutes. **Stop anything else using the GPU first** (for example the walkthrough notebook's vLLM server).
+**Hardware and time.** One GPU with about 80 GB, and about 15 minutes end to end on an H100 (plus model downloads), mostly in §2 and §9. The policy is `Qwen2.5-0.5B-Instruct`, small enough that every stage trains in minutes. **Stop anything else using the GPU first** (for example the walkthrough notebook's vLLM server).
 ''')
 
 md(r'''
@@ -1365,7 +1365,7 @@ if example is not None:
 ''')
 
 md(r'''
-With this simple agent and a model that follows its template closely, mismatches are rare: around 1% of episodes. But every one is a training example where the loss pushes on tokens the model never chose, with log-probs that don't belong to them, and nothing flags it. With messier agents (frameworks that reformat messages, models that don't follow the template exactly, long multi-turn traces) the rate goes up, and a real agent's logs often don't contain the full prompt the model saw at all.
+With this simple agent and a model that follows its template closely, mismatches are rare: under 1% of episodes (5 to 7 of about 750 in our runs). But every one is a training example where the loss pushes on tokens the model never chose, with log-probs that don't belong to them, and nothing flags it. With messier agents (frameworks that reformat messages, models that don't follow the template exactly, long multi-turn traces) the rate goes up, and a real agent's logs often don't contain the full prompt the model saw at all.
 
 So there's exactly one place where a real agent's training data can be captured correctly: **at the HTTP boundary between the agent and the inference engine**, where the engine still knows the exact token IDs and log-probs. Let's build that.
 ''')
@@ -1569,7 +1569,7 @@ for step in range(3):
 ''')
 
 md(r'''
-**A real, unmodified agent is now training**, through about 60 lines of gateway and 20 lines of process launching. That's the core idea of Agent Lightning, and you now know it from the inside.
+**A real, unmodified agent is now training**, through about 60 lines of gateway and 20 lines of process launching. Don't read much into the rewards: at temperature 1 this model rarely gets a Calc-X question fully right (a few percent of rollouts), and three small steps only nudge that. What matters is that every number in the step line came from tokens the agent's own calls produced. That's the core idea of Agent Lightning, and you now know it from the inside.
 
 Here's what this toy version doesn't handle. Each item is something you hit as soon as you run it for real, and each is what Agent Lightning's Gateway, Controller and trainer integration actually consist of:
 
@@ -1750,11 +1750,13 @@ for path in sorted((WORK / "verl_rollouts").glob("*.jsonl"), key=lambda p: int(p
 ''')
 
 md(r'''
+The jump from 0 to 1 in validation accuracy is almost all **format**. Look at the episode above: the tool returns the right number, and the model then states it in plain text instead of `\boxed{}`, so the reward is 0. Every validation episode starts that way. Three steps are enough to learn the format, since the tool already does the arithmetic. Same lesson as §2.2: the reward checks the format, so the format improves first, and that's why a large first-steps gain is rarely a gain in ability.
+
 `critic/score/mean` is the training reward (verl logs rewards under `critic/` even without a critic), `num_turns` counts messages per episode, and the `timing_s/*` rows are the same phases you timed by hand in every stage.
 
 ### 9.2 verl + Agent Lightning: the real agent
 
-Now the agent from §7.3 and §8, with the real Gateway and Controller instead of our toy, and `AgentLightningRayPPOTrainer` instead of our loop. This is the same command the walkthrough notebook (§10) and `examples/calc_x/run_local.sh` use, with the 0.5B model and a few short-run overrides.
+Now the agent from §7.3 and §8, with the real Gateway and Controller instead of our toy, and `AgentLightningRayPPOTrainer` instead of our loop. This is the same command the walkthrough notebook (§10) and `examples/calc_x/run_local.sh` use, with the 1.5B model from §7.3 and a few short-run overrides.
 ''')
 
 code(r'''
@@ -1795,6 +1797,8 @@ read_metrics(AGL_METRICS, [
 ''')
 
 md(r'''
+Three steps barely move Calc-X: `val/reward` on 20 questions is noisy (it went 0.40 → 0.40 and 0.45 → 0.50 in two of our runs), and most groups have zero advantage, so little of each batch actually trains. The full recipe runs 512 steps. Here the point is the plumbing.
+
 Compare the two runs' configs. The verl side is almost the same. What changed is *where rollouts come from*: in §9.1 verl ran a token-level agent loop inside its Ray workers; in §9.2 it registered its vLLM replicas with the Gateway, queued rollouts, and the Controller ran the unmodified AutoGen agent as ordinary processes (or Kubernetes pods) that never knew they were being trained.
 ''')
 

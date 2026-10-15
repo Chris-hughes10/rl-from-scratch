@@ -3,10 +3,15 @@
 include config.env
 export AZURE_EXTENSION_DIR
 
-.PHONY: help check-exp isolate-run flash-attn-wheel build-exp local data job
+.PHONY: help check-exp calc-x-data isolate-run flash-attn-wheel build-exp local data job
 
 help: ## Show this help
 	@grep -hE '^[a-zA-Z_-]+:.*## ' $(MAKEFILE_LIST) | awk -F ':.*## ' '{printf "  %-17s %s\n", $$1, $$2}'
+
+# Google Drive file linked from Agent Lightning's Calc-X docs
+calc-x-data: ## Download the Calc-X dataset into examples/calc_x/data (once): make calc-x-data
+	@cd examples/calc_x/data && uvx gdown 1FQMyKLLd6hP9dw9rfZn1EZOWNvKaDsqw -O calc-x-data.zip && \
+	unzip -o calc-x-data.zip && rm calc-x-data.zip
 
 check-exp:
 	@test -n "$(exp)" || { echo "You must pass the 'exp' argument, e.g. exp=calc_x"; exit 1; }

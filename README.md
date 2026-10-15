@@ -37,9 +37,7 @@ Requires [uv](https://docs.astral.sh/uv/), an NVIDIA driver supporting CUDA 13.0
 
 ```bash
 uv sync                                   # agentlightning, the Calc-X agent's deps, notebook deps
-bash scripts/setup_verl.sh 0.8.0 cu130    # verl 0.8.0, vLLM 0.22, torch cu130; builds flash-attn (10-30 min)
-#   or, with a prebuilt wheel (see azureml/README.md, `make flash-attn-wheel`):
-#   FLASH_ATTN_WHEEL=azureml/calc_x/environment/wheels/flash_attn-2.8.3-cp312-cp312-linux_x86_64.whl bash scripts/setup_verl.sh 0.8.0 cu130
+bash scripts/setup_verl.sh 0.8.0 cu130    # verl 0.8.0, vLLM 0.22, torch cu130, and flash-attn compiled from source (10-30 min)
 
 # Optional: pin to the exact package set the notebooks were verified with (also used by the AzureML image)
 uv pip install --no-deps -r azureml/calc_x/environment/requirements.txt \
@@ -47,12 +45,18 @@ uv pip install --no-deps -r azureml/calc_x/environment/requirements.txt \
 
 # Jupyter kernel the notebooks expect
 .venv/bin/python -m ipykernel install --user --name agl-rl-tutorials --display-name "Python (agl-rl-tutorials .venv)"
+
+# Calc-X dataset (train/test/test_mini parquet, ~2 MB) from the Google Drive link in Agent Lightning's docs
+make calc-x-data
 ```
 
 Don't re-run `uv sync` after `setup_verl.sh`: it would remove the GPU stack, which isn't in `pyproject.toml`.
 
-Download the Calc-X dataset into `examples/calc_x/data/` as described in
-[examples/calc_x/README.md](examples/calc_x/README.md).
+**flash-attn.** There is no prebuilt flash-attn wheel for torch 2.11 + CUDA 13.0, so `setup_verl.sh` compiles it.
+That's all a local setup needs. The AzureML image can't compile it (too slow on the image builder), so it installs a
+wheel from `azureml/calc_x/environment/wheels/` (gitignored, 113 MB). Build that once, after the setup above, with
+`make flash-attn-wheel exp=calc_x` (about 10 min on 40 cores). Once the wheel exists, a new environment can skip the
+compile: `FLASH_ATTN_WHEEL=azureml/calc_x/environment/wheels/flash_attn-2.8.3-cp312-cp312-linux_x86_64.whl bash scripts/setup_verl.sh 0.8.0 cu130`.
 
 ## Running
 

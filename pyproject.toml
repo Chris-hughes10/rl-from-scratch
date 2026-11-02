@@ -15,6 +15,7 @@ dependencies = [
     "httpx",
     "sympy",
     # notebooks
+    "azure-identity",  # rl_training_from_scratch §8.4: Entra ID auth for a hosted (Azure AI Foundry) LLM judge
     "ipykernel",
     "matplotlib",
     "pandas",

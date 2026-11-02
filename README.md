@@ -1,28 +1,30 @@
 # RL training for LLM agents: verl + Agent Lightning, hands on
 
-Two notebooks that take apart how [verl](https://github.com/volcengine/verl) and
+Notebooks that take apart how [verl](https://github.com/volcengine/verl) and
 [Agent Lightning](https://github.com/microsoft/agent-lightning) train an LLM agent with reinforcement learning, using
 Agent Lightning's Calc-X example (an AutoGen agent with an MCP calculator tool).
 
-Read them in this order:
+Two notebooks, meant to be read in order:
 
-1. [tutorial/rl_training_walkthrough.ipynb](tutorial/rl_training_walkthrough.ipynb): top-down. One complete RL step
+1. **[Part 1: rl_training_from_scratch.ipynb](tutorial/rl_training_from_scratch.ipynb)** — bottom-up. GRPO built in
+   plain PyTorch (log-probs, advantages, PPO-clip, and a check that an update did what it should), then vLLM,
+   `DataProto`, verl's algorithm functions, Ray, worker groups, a multi-turn tool loop, and a token-recording gateway
+   for a real agent, each swapped for its library version (verl, then Agent Lightning) and checked against what we
+   built, ending with plain verl and verl + Agent Lightning end to end.
+2. **[Part 2: rl_training_walkthrough.ipynb](tutorial/rl_training_walkthrough.ipynb)** — top-down. One complete RL step
    done by hand with the real components (vLLM, the Agent Lightning Gateway and Controller, the real agent), from
    rollouts to `DataProto`, GRPO advantages and a PPO update, then a short run of the real trainer.
-2. [tutorial/verl_from_scratch.ipynb](tutorial/verl_from_scratch.ipynb): bottom-up. GRPO in plain PyTorch, then
-   vLLM, `DataProto`, verl's algorithm functions, Ray and worker groups are swapped in one at a time, ending with
-   plain verl and verl + Agent Lightning side by side.
 
-Both need one GPU with about 80 GB of memory.
+All of them need one GPU with about 80 GB of memory.
 
 ## Layout
 
 ```
-tutorial/                  the two notebooks
+tutorial/                  the notebooks
 examples/calc_x/           Calc-X agent and training entrypoint, copied from Agent Lightning v1.0.2
 scripts/setup_verl.sh      installs the verl GPU stack (from Agent Lightning, plus a prebuilt flash-attn option)
 debug/rollout_step.py      one rollout + training batch without Ray, for stepping through in a debugger
-tools/                     generator for verl_from_scratch.ipynb, and CPU-only checks of its pure-Python cells
+tools/                     generators for the from-scratch notebooks, and CPU-only checks of their pure-Python cells
 azureml/                   AzureML jobs: Calc-X training, and end-to-end execution of the from-scratch notebook
 Makefile, config.env       AzureML / Docker commands (`make help`)
 run_calc_x_local.sh        full Calc-X training run on this machine, without W&B
@@ -66,12 +68,15 @@ stop their own background services (vLLM, the Gateway, the Controller).
 Full Calc-X training (a few hours on one GPU): `./run_calc_x_local.sh`. AzureML: see
 [azureml/README.md](azureml/README.md).
 
-After editing `tools/build_verl_from_scratch.py`, regenerate the notebook and check it without a GPU:
+The from-scratch notebook is generated: edit `tools/build_rl_training_from_scratch.py`, then regenerate and check
+it without a GPU:
 
 ```bash
-.venv/bin/python tools/build_verl_from_scratch.py tutorial/verl_from_scratch.ipynb
-CUDA_VISIBLE_DEVICES="" .venv/bin/python tools/cpu_check.py
+.venv/bin/python tools/build_rl_training_from_scratch.py tutorial/rl_training_from_scratch.ipynb
+CUDA_VISIBLE_DEVICES="" .venv/bin/python tools/cpu_check.py tutorial/rl_training_from_scratch.ipynb
 ```
+
+Regenerating clears the saved outputs, so re-run the notebook afterwards to restore them.
 
 ## License
 

@@ -4,8 +4,10 @@ import json
 from pathlib import Path
 import os
 import re
+import sys
 
-NB = str(Path(__file__).resolve().parents[1] / "tutorial/verl_from_scratch.ipynb")
+# Usage: cpu_check.py [notebook]; defaults to the from-scratch notebook.
+NB = sys.argv[1] if len(sys.argv) > 1 else str(Path(__file__).resolve().parents[1] / "tutorial/verl_from_scratch.ipynb")
 cells = [("".join(c["source"]), c["cell_type"]) for c in json.load(open(NB))["cells"]]
 code = [s for s, t in cells if t == "code"]
 
@@ -28,10 +30,10 @@ def run(src: str, label: str) -> None:
 setup = cell("import gc").replace('DEVICE = "cuda"', 'DEVICE = "cpu"')
 setup = re.sub(r"free, total = torch.cuda.mem_get_info\(\)\n.*", "", setup, flags=re.S)
 run(setup, "setup")
-run(cell("import httpx"), "helpers")
+run(cell("import atexit") if any(s.startswith("import atexit") for s in code) else cell("import httpx"), "helpers")
 ns.setdefault("CALC_X_MODEL", "Qwen/Qwen2.5-1.5B-Instruct")  # defined in a GPU cell (§8) the harness skips
 
-writefile = cell("%%writefile /tmp/verl-from-scratch/arith_task.py")
+writefile = next(s for s in code if s.startswith("%%writefile") and s.split("\n", 1)[0].endswith("/arith_task.py"))
 path, body = writefile.split("\n", 1)
 open(path.split()[1], "w").write(body)
 run(cell("import importlib"), "task")
@@ -43,6 +45,9 @@ run(cell("def collate("), "collate (with sample data)") if False else None
 collate_src = cell("def collate(").split("\n\ndemo = ")[0]
 run(collate_src, "collate")
 run(cell("def rows("), "algorithm functions")
+for prefix in ("def grpo_advantages(", "def ppo_clip_loss(", "def ppo_update("):  # separate cells in rl_training_from_scratch
+    if any(s.startswith(prefix) for s in code):
+        run(cell(prefix), prefix)
 
 # fake samples, prompt-major, n=8
 import random

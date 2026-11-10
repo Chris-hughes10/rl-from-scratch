@@ -68,15 +68,11 @@ stop their own background services (vLLM, the Gateway, the Controller).
 Full Calc-X training (a few hours on one GPU): `./run_calc_x_local.sh`. AzureML: see
 [azureml/README.md](azureml/README.md).
 
-The from-scratch notebook is generated: edit `tools/build_rl_training_from_scratch.py`, then regenerate and check
-it without a GPU:
+After editing the from-scratch notebook, check its pure-Python parts without a GPU:
 
 ```bash
-.venv/bin/python tools/build_rl_training_from_scratch.py tutorial/rl_training_from_scratch.ipynb
-CUDA_VISIBLE_DEVICES="" .venv/bin/python tools/cpu_check.py tutorial/rl_training_from_scratch.ipynb
+CUDA_VISIBLE_DEVICES="" .venv/bin/python tools/cpu_check.py
 ```
-
-Regenerating clears the saved outputs, so re-run the notebook afterwards to restore them.
 
 ## License
 

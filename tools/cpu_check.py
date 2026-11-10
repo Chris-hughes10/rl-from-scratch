@@ -7,7 +7,7 @@ import re
 import sys
 
 # Usage: cpu_check.py [notebook]; defaults to the from-scratch notebook.
-NB = sys.argv[1] if len(sys.argv) > 1 else str(Path(__file__).resolve().parents[1] / "tutorial/verl_from_scratch.ipynb")
+NB = sys.argv[1] if len(sys.argv) > 1 else str(Path(__file__).resolve().parents[1] / "tutorial/rl_training_from_scratch.ipynb")
 cells = [("".join(c["source"]), c["cell_type"]) for c in json.load(open(NB))["cells"]]
 code = [s for s, t in cells if t == "code"]
 
@@ -41,10 +41,10 @@ run(cell("import importlib"), "task")
 tok_cell = cell("from transformers import AutoModelForCausalLM")
 tok_cell = tok_cell.split("\n\npolicy = load_policy()")[0]
 run(tok_cell, "tokenizer + helpers (no model)")
-run(cell("def collate("), "collate (with sample data)") if False else None
-collate_src = cell("def collate(").split("\n\ndemo = ")[0]
+run(cell("def make_padded_batch("), "collate (with sample data)") if False else None
+collate_src = cell("def make_padded_batch(").split("\n\ndemo = ")[0]
 run(collate_src, "collate")
-run(cell("def rows("), "algorithm functions")
+run(cell("def select_rows("), "algorithm functions")
 for prefix in ("def grpo_advantages(", "def ppo_clip_loss(", "def ppo_update("):  # separate cells in rl_training_from_scratch
     if any(s.startswith(prefix) for s in code):
         run(cell(prefix), prefix)
@@ -65,10 +65,10 @@ for p in TRAIN[:4]:
         ids = tok.encode(text, add_special_tokens=False)[: rng.randint(3, 20)] + [tok.convert_tokens_to_ids("<|im_end|>")]
         samples.append({"prompt_ids": prompt, "response_ids": ids, "log_probs": [-0.1] * len(ids)})
 ns["samples"] = samples
-ns["batch"] = ns["collate"]([s["prompt_ids"] for s in samples], [s["response_ids"] for s in samples])
+ns["batch"] = ns["make_padded_batch"]([s["prompt_ids"] for s in samples], [s["response_ids"] for s in samples])
 
 # §3 DataProto demo (skip the compute_log_probs line)
-dp_src = cell("from verl import DataProto").replace('print("works with §1 helpers: ", compute_log_probs(policy, dp.batch).shape)', "")
+dp_src = cell("from verl import DataProto").replace('print("works with §1 helpers: ", compute_log_probs(policy, proto.batch).shape)', "")
 run(dp_src, "DataProto")
 
 # §4 comparisons (skip the flash-attn logprobs part, which needs CUDA)
@@ -82,7 +82,7 @@ problems = TRAIN[:4]
 last_batch = ns["build_batch"](samples, [problems[i // 8]["answer"] for i in range(len(samples))], [i // 8 for i in range(len(samples))])
 ns["add_advantages"](last_batch)
 last_batch.batch["old_log_probs"] = torch.full(last_batch.batch["responses"].shape, -0.12)
-print("batch_metrics:", ns["batch_metrics"](last_batch))
+print("batch_metrics:", ns["compute_batch_metrics"](last_batch))
 ns["last_batch"] = last_batch
 
 # §6 worker groups on CPU-only Ray
@@ -92,7 +92,7 @@ ray.init(num_cpus=16, num_gpus=0, include_dashboard=False, runtime_env={"env_var
 ns["ray"] = ray
 run(cell("def free_port()"), "MyWorkerGroup")
 run(cell("from verl.single_controller.base import Worker"), "verl RayWorkerGroup")
-run(cell("for w in my_wg.workers"), "kill workers")
+run(cell("for worker in my_wg.workers"), "kill workers")
 ray.shutdown()
 
 # §7 tool prompt + observation check + tool call parsing
@@ -116,7 +116,7 @@ ep["reward"] = ns["reward_fn"](ep["last_text"], 2)
 ns["all_episodes"] = [ep, dict(ep, group=1)]
 b = ns["episodes_to_batch"](ns["all_episodes"])
 print("episode batch:", {k: tuple(v.shape) for k, v in b.batch.items()}, "trained tokens:", b.batch["response_mask"].sum().item())
-rerender_src = cell("def model_turns(")
+rerender_src = cell("def split_model_turns(")
 run(rerender_src, "rerender check (synthetic, should match)")
 
 # §8 gateway_batch on synthetic records

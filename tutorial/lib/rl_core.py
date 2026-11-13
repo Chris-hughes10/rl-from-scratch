@@ -2,8 +2,9 @@
 """Notebook 1's trainer as a module, so notebooks 2-4 can import it without re-running notebook 1.
 The vLLM pieces (vllm_generate, save_for_inference, push_weights, plot_histories) are taught in notebook 2, §2.3-§2.5.
 
-Every function here is copied verbatim from those notebooks (tools/check_series.py checks that they match);
-read them there, where each one is explained step by step.
+Functions that the notebooks also define are copied verbatim from them (tools/check_series.py checks that they
+match); read them there, where each one is explained. The batching plumbing (left_pad, truncate_at_stop,
+make_padded_batch, select_rows) lives only here: notebook 1 imports it and shows what the batch looks like.
 """
 
 import time
@@ -146,16 +147,16 @@ def select_rows(batch, index):
     return batch[index]
 
 
-def micro_batch_log_probs(model, micro_batch, with_grad: bool = False) -> torch.Tensor:
+def batch_log_probs(model, batch, with_grad: bool = False) -> torch.Tensor:
     """log π(token) for every response token; shape (rows, response_width)."""
-    response_ids = micro_batch["responses"].to(DEVICE)
+    response_ids = batch["responses"].to(DEVICE)
     response_width = response_ids.shape[1]
    
     with torch.set_grad_enabled(with_grad), torch.autocast("cuda", dtype=torch.bfloat16):
         logits = model(  # 1. one forward pass over prompt + response
-            input_ids=micro_batch["input_ids"].to(DEVICE),
-            attention_mask=micro_batch["attention_mask"].to(DEVICE),
-            position_ids=micro_batch["position_ids"].to(DEVICE),
+            input_ids=batch["input_ids"].to(DEVICE),
+            attention_mask=batch["attention_mask"].to(DEVICE),
+            position_ids=batch["position_ids"].to(DEVICE),
             logits_to_keep=response_width + 1,
         ).logits
     
@@ -172,7 +173,7 @@ def compute_log_probs(model, batch, micro_batch_size: int = 16) -> torch.Tensor:
         chunks = []
         for start in range(0, num_rows, micro_batch_size):
             micro_batch = select_rows(batch, slice(start, start + micro_batch_size))
-            chunks.append(micro_batch_log_probs(model, micro_batch))
+            chunks.append(batch_log_probs(model, micro_batch))
     
     model.train()  # back to training mode, so ppo_update gets gradient checkpointing again
     return torch.cat(chunks).cpu()
@@ -182,10 +183,9 @@ def grpo_advantages(rewards: torch.Tensor, group_ids, eps: float = 1e-6) -> torc
     """Each reward minus its group's mean, divided by its group's std. A group is all the attempts at one question."""
     
     advantages = torch.zeros_like(rewards)
-    group_ids = np.asarray(group_ids)
     
-    for group in np.unique(group_ids):
-        members = torch.as_tensor(np.nonzero(group_ids == group)[0])  # row indices of this group's attempts
+    for group in set(group_ids):
+        members = [row for row, group_id in enumerate(group_ids) if group_id == group]  # this group's rows
         group_rewards = rewards[members]
         
         if len(members) > 1:
@@ -210,6 +210,7 @@ def ppo_update(model, optimizer, batch, old_log_probs, advantages, mini_batch_si
     """One pass over the batch: one optimizer step per mini-batch, gradient accumulation over micro-batches."""
     num_rows = batch["input_ids"].shape[0]
     grad_norms = []
+    trained_token_ratios = []  # ρ = π_θ / π_old of every trained token, for monitoring
     for mini_start in range(0, num_rows, mini_batch_size):
         mini_end = min(mini_start + mini_batch_size, num_rows)
         num_trained_tokens = batch["response_mask"][mini_start:mini_end].sum().item()  # trained tokens in the whole mini-batch
@@ -218,16 +219,28 @@ def ppo_update(model, optimizer, batch, old_log_probs, advantages, mini_batch_si
         for micro_start in range(mini_start, mini_end, micro_batch_size):
             row_slice = slice(micro_start, min(micro_start + micro_batch_size, mini_end))
             micro_batch = select_rows(batch, row_slice)
-            log_probs = micro_batch_log_probs(model, micro_batch, with_grad=True)
+            log_probs = batch_log_probs(model, micro_batch, with_grad=True)
             mask = micro_batch["response_mask"].to(DEVICE).float()
-            loss = loss_fn(log_probs, old_log_probs[row_slice].to(DEVICE), advantages[row_slice].to(DEVICE), mask, num_trained_tokens)
+            micro_old_log_probs = old_log_probs[row_slice].to(DEVICE)
+            loss = loss_fn(log_probs, micro_old_log_probs, advantages[row_slice].to(DEVICE), mask, num_trained_tokens)
             loss.backward()
+
+            ratio = torch.exp(log_probs.detach() - micro_old_log_probs)
+            trained_token_ratios.append(ratio[mask.bool()].cpu())
 
         # Then one optimizer step for the mini-batch
         grad_norms.append(torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0).item())
         optimizer.step()
         optimizer.zero_grad(set_to_none=True)
-    return {"grad_norm": float(np.mean(grad_norms))}
+
+    ratios = torch.cat(trained_token_ratios)
+    outside_clip_range = (ratios < 0.8) | (ratios > 1.28)  # ppo_clip_loss's default clip range
+    return {
+        "grad_norm": float(np.mean(grad_norms)),
+        "ratio_min": ratios.min().item(),
+        "ratio_max": ratios.max().item(),
+        "clip_fraction": outside_clip_range.float().mean().item(),
+    }
 
 
 verl_policy_loss = get_policy_loss_fn("vanilla")
@@ -251,17 +264,17 @@ def rl_step(policy, optimizer, generate, problems, samples_per_prompt: int = 8, 
     timing["gen"] = time.time() - start
     group_ids = [i // samples_per_prompt for i in range(len(samples))]
 
-    # 2. Score each response, and 3. pad everything into one batch
+    # 2. Score each response, then pad everything into one batch (for π_old, the advantages and the update)
     texts = [decode_tokens(sample["response_ids"]) for sample in samples]
     rewards = torch.tensor([reward_fn(text, problems[group]["answer"]) for text, group in zip(texts, group_ids)])
     batch = make_padded_batch([sample["prompt_ids"] for sample in samples], [sample["response_ids"] for sample in samples])
 
-    # 4. Log-probs under the weights that generated the samples (π_old)
+    # π_old: log-probs under the weights that generated the samples (§1.9)
     start = time.time()
     old_log_probs = compute_log_probs(policy, batch)
     timing["old_log_prob"] = time.time() - start
 
-    # 5. Advantages with verl's GRPO estimator, which takes each response's reward on its last token
+    # 3. Advantages with verl's GRPO estimator, which takes each response's reward on its last token
     last_token = batch["response_mask"].sum(-1).clamp(min=1) - 1
     token_level_rewards = torch.zeros(batch["response_mask"].shape)
     token_level_rewards[torch.arange(len(samples)), last_token] = rewards
@@ -270,7 +283,7 @@ def rl_step(policy, optimizer, generate, problems, samples_per_prompt: int = 8, 
     )
     batch.update(old_log_probs=old_log_probs, advantages=advantages)  # kept for inspection after the update
 
-    # 6. PPO update, with verl's loss
+    # 4. Update: PPO, with verl's loss
     start = time.time()
     stats = ppo_update(policy, optimizer, batch, old_log_probs, advantages, loss_fn=verl_ppo_loss, **update_kwargs)
     timing["update"] = time.time() - start

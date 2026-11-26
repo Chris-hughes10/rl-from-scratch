@@ -13,6 +13,8 @@ notebook first if its outputs are stale.
 
 Usage: python tools/notebook_to_quarto.py tutorial/series/grpo_manual.ipynb --slug grpo-from-scratch \
            [--site ../Chris-hughes10.github.io] [--code-url URL]
+
+--code-url defaults to the notebook on GitHub: GITHUB_REPO/blob/main/<the notebook's path in this repo>.
 """
 
 import argparse
@@ -22,8 +24,9 @@ import shutil
 import uuid
 from pathlib import Path
 
-DEFAULT_SITE = Path(__file__).resolve().parents[2] / "Chris-hughes10.github.io"
-CODE_URL_PLACEHOLDER = "https://github.com/Chris-hughes10/REPO-TBC"  # TODO: the public repo isn't live yet
+REPO = Path(__file__).resolve().parents[1]
+DEFAULT_SITE = REPO.parent / "Chris-hughes10.github.io"
+GITHUB_REPO = "https://github.com/Chris-hughes10/rl-from-scratch"  # this repo, on GitHub
 
 FRONT_MATTER = """\
 title: "{title}"
@@ -88,12 +91,13 @@ def main():
     parser.add_argument("notebook", type=Path)
     parser.add_argument("--slug", required=True, help="the post's folder name, e.g. grpo-from-scratch")
     parser.add_argument("--site", type=Path, default=DEFAULT_SITE, help="the website repo")
-    parser.add_argument("--code-url", default=CODE_URL_PLACEHOLDER, help="where readers can get the notebook")
+    parser.add_argument("--code-url", help="where readers can get the notebook (default: the notebook in GITHUB_REPO)")
     parser.add_argument("--date", default=None, help="post date for a new _metadata.yml (default: today)")
     args = parser.parse_args()
 
     notebook_path = args.notebook.resolve()
     notebook = json.loads(notebook_path.read_text())
+    args.code_url = args.code_url or f"{GITHUB_REPO}/blob/main/{notebook_path.relative_to(REPO).as_posix()}"
     post_dir = args.site.resolve() / "myblog" / "posts" / args.slug
     post_dir.mkdir(parents=True, exist_ok=True)
 
@@ -136,7 +140,11 @@ def main():
 
     metadata_path = post_dir / "_metadata.yml"
     if metadata_path.exists():
-        print(f"kept the existing {metadata_path} (title and subtitle in the notebook: {title!r} / {subtitle!r})")
+        print(f"kept the existing {metadata_path}")
+        existing = metadata_path.read_text()
+        for key, value in (("title", title), ("subtitle", subtitle)):
+            if f'{key}: "{value}"' not in existing.replace('\\"', '"'):
+                print(f"warning: the notebook's {key} differs from {metadata_path.name}'s; the site shows the latter. Notebook: {value!r}")
     else:
         from datetime import date
         metadata_path.write_text(FRONT_MATTER.format(title=title.replace('"', '\\"'), subtitle=subtitle.replace('"', '\\"'),
@@ -144,8 +152,7 @@ def main():
                                                      reading_time=int(reading_time_minutes(notebook))))
         print(f"wrote {metadata_path}")
     print(f"wrote {post_dir / 'index.ipynb'} and {len(image_paths)} images")
-    if args.code_url == CODE_URL_PLACEHOLDER:
-        print(f"note: the code link is a placeholder ({CODE_URL_PLACEHOLDER}); pass --code-url once the repo is public")
+    print(f"code link: {args.code_url}")
 
 
 if __name__ == "__main__":

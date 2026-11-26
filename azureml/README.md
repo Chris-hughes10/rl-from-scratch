@@ -1,27 +1,25 @@
 # AzureML jobs
 
-Runs the Calc-X GRPO training (`examples/calc_x`) and the end-to-end execution of `tutorial/verl_from_scratch.ipynb` as
-Azure ML command jobs. Everything is driven from the repo-root `Makefile`, configured by `config.env`:
+Runs the Calc-X GRPO training (`examples/calc_x`) as an Azure ML command job. Everything is driven from the repo-root
+`Makefile`, configured by `config.env` (placeholders; put your own workspace, resource group and cluster in a
+git-ignored `config.local.env`, which overrides it):
 
 ```
-config.env                       # workspace, resource group, paths
+config.env                       # workspace, resource group, compute cluster, paths (placeholders)
+config.local.env                 # your real values (git-ignored)
 Makefile                         # `make help` lists the commands
 azureml/calc_x/
 ├── azure-ml-job.yaml            # job spec: command, inputs/outputs, environment, compute
 ├── run_job.sh                   # starts Ray, the Gateway and the Controller, then the trainer (same flow as run_local.sh)
 ├── aml_hooks.py                 # Ray worker setup hook: keeps verl's MLflow params under Azure ML's 200-param limit
-└── environment/                 # shared by both experiments
+└── environment/
     ├── Dockerfile               # Python 3.12 + pinned GPU stack + MLflow
     ├── requirements.txt         # exact versions of the locally verified .venv (incl. agentlightning), --no-deps
     └── wheels/                  # prebuilt flash-attn wheel (gitignored; `make flash-attn-wheel exp=calc_x`)
-azureml/verl_from_scratch/
-├── azure-ml-job.yaml            # runs the notebook on one GPU, using the calc_x environment
-└── run_job.sh                   # executes the notebook with nbclient, saves it to outputs/ after every cell
 ```
 
-The job runs on the `h1002-pi` cluster (Standard_NC80adis_H100_v5, 2× H100, scales to zero after 10 idle minutes).
-The cluster runs as the workspace's `explorepi-ci-uami` identity, which the workspace needs because its storage uses
-identity-based access.
+The job was developed on a Standard_NC80adis_H100_v5 cluster (2× H100). If your workspace's storage uses
+identity-based access, give the cluster a managed identity with access to it.
 
 ## One-time setup
 
@@ -43,9 +41,6 @@ make local exp=calc_x script-xargs="trainer.total_training_steps=2 trainer.save_
 # AzureML: smoke test first (2 steps, 20 validation questions), then the full recipe (512 steps)
 make job exp=calc_x job-xargs="--set inputs.overrides='trainer.total_training_steps=2' inputs.val_file=test_mini.parquet"
 make job exp=calc_x
-
-# The from-scratch notebook (about 30 min on one H100); the executed notebook lands in the job's outputs/
-make job exp=verl_from_scratch
 ```
 
 Both `make local` and `make job` first copy the code a run needs into `azureml/isolated_runs/<run_name>/` and run from

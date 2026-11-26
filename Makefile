@@ -1,6 +1,7 @@
-# All variables referenced in UPPER_CAPS come from configuration (config.env).
+# All variables referenced in UPPER_CAPS come from configuration (config.env, overridden by config.local.env if present).
 # All variables referenced in lower_caps are arguments to be passed (some with defaults).
 include config.env
+-include config.local.env
 export AZURE_EXTENSION_DIR
 
 .PHONY: help check-exp calc-x-data isolate-run flash-attn-wheel build-exp local data job
@@ -20,13 +21,12 @@ check-exp:
 run_name := $(exp)_$(shell date +%Y%m%d_%H%M%S)
 run_dir = $(ISOLATED_RUNS_PATH)/$(run_name)
 
-# Copies exactly what a run needs (the Calc-X code, the tutorials, the experiment's job spec and scripts) into a fresh
+# Copies exactly what a run needs (the Calc-X code, the experiment's job spec and scripts) into a fresh
 # folder. Local runs and AzureML jobs both execute from it, and the AzureML code snapshot stays small.
 # agentlightning itself comes from the image (environment/requirements.txt).
 isolate-run: check-exp
-	@mkdir -p $(run_dir)/examples/calc_x $(run_dir)/tutorial
+	@mkdir -p $(run_dir)/examples/calc_x
 	@rsync -a --exclude __pycache__ --include '*.py' --include '*.yaml' --exclude '*' examples/calc_x/ $(run_dir)/examples/calc_x/
-	@cp tutorial/*.ipynb $(run_dir)/tutorial/
 	@find $(CODE_PATH)/$(exp) -maxdepth 1 -type f -exec cp {} $(run_dir)/ \;
 	@echo "Run isolated in: $(run_dir)"
 
@@ -59,5 +59,5 @@ data: check-exp ## Upload examples/<exp>/data/*.parquet as a data asset (once): 
 	status=$$?; rm -rf $$tmp; exit $$status
 
 job: isolate-run ## Submit an experiment to Azure ML: make job exp=calc_x [job-xargs="--set inputs.overrides='trainer.total_training_steps=2'"]
-	az ml job create -f $(run_dir)/azure-ml-job.yaml --name $(run_name) \
+	az ml job create -f $(run_dir)/azure-ml-job.yaml --name $(run_name) --set compute=azureml:$(COMPUTE) \
 		--resource-group $(RESOURCE_GROUP) --workspace-name $(WORKSPACE) $(job-xargs)

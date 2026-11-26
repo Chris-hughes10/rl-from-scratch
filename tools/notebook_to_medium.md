@@ -43,10 +43,13 @@ Then check the new tags against the exceptions above.
 
 ```bash
 uv run tools/notebook_to_medium.py tutorial/series/grpo_manual.ipynb \
-    --site-url https://chris-hughes10.github.io/posts/grpo-from-scratch/ --code-url <REPO URL>
+    --site-url https://chris-hughes10.github.io/posts/grpo-from-scratch/
 ```
 
-- **`--site-url`:** adds an italic line under the subtitle saying that the article was first published on the website, where the code can be copied and the tables and equations render properly, with a link to the notebook on GitHub (`--code-url`; a `REPO-TBC` placeholder until the repo is public).
+This page is the reference for the export script. The full publishing checklist, website first and then Medium, is in
+[docs/publishing.md](../docs/publishing.md).
+
+- **`--site-url`:** adds an italic line under the subtitle saying that the article was first published on the website, where the code can be copied and the tables and equations render properly, with a link to the notebook on GitHub. That link defaults to the notebook's path in `GITHUB_REPO` (set at the top of the script); `--code-url` overrides it.
 - **On Medium:** set the story's canonical link to the same site URL.
 
 - **Dependencies:** they're declared inside the script (PEP 723), so `uv` installs them in a separate environment and the project's `.venv` is not touched.

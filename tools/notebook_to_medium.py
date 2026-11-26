@@ -38,7 +38,7 @@ from playwright.sync_api import sync_playwright
 
 REPO = Path(__file__).resolve().parents[1]
 TAGS = {"medium-code", "medium-screenshot", "medium-skip"}
-CODE_URL_PLACEHOLDER = "https://github.com/Chris-hughes10/REPO-TBC"  # as in notebook_to_quarto.py, until the repo is public
+GITHUB_REPO = "https://github.com/Chris-hughes10/rl-from-scratch"  # this repo, on GitHub (as in notebook_to_quarto.py)
 
 # Applied to the notebook's HTML before screenshotting: no "In [3]:" prompts, and long lines wrap instead of being cut off
 SCREENSHOT_CSS = """
@@ -203,10 +203,11 @@ def main():
     parser.add_argument("--out", type=Path, help="output directory (default: outputs/medium/<notebook name>)")
     parser.add_argument("--keep-stderr", action="store_true", help="keep warnings: stderr output and vLLM's log lines (left out by default)")
     parser.add_argument("--site-url", help="the article's page on the website; adds a 'first published on my website' line under the subtitle")
-    parser.add_argument("--code-url", default=CODE_URL_PLACEHOLDER, help="where readers can get the notebook (used with --site-url)")
+    parser.add_argument("--code-url", help="where readers can get the notebook, used with --site-url (default: the notebook in GITHUB_REPO)")
     args = parser.parse_args()
 
     notebook_path = args.notebook.resolve()
+    args.code_url = args.code_url or f"{GITHUB_REPO}/blob/main/{notebook_path.relative_to(REPO).as_posix()}"
     out_dir = (args.out or REPO / "outputs" / "medium" / notebook_path.stem).resolve()
     image_dir = out_dir / "images"
     if image_dir.exists():
@@ -249,8 +250,8 @@ def main():
     (out_dir / "article.html").write_text(article.render(with_images=False))
     (out_dir / "preview.html").write_text(article.render(with_images=True))
 
-    if args.site_url and args.code_url == CODE_URL_PLACEHOLDER:
-        print(f"note: the code link is a placeholder ({CODE_URL_PLACEHOLDER}); pass --code-url once the repo is public")
+    if args.site_url:
+        print(f"code link: {args.code_url}")
     print(f"{len(article.images)} images in {image_dir}")
     print(f"article: {out_dir / 'article.html'}   preview: {out_dir / 'preview.html'}")
     if untagged:

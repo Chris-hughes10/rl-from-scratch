@@ -1,7 +1,7 @@
 [project]
 name = "agl-rl-tutorials"
 version = "0.1.0"
-description = "Hands-on notebooks for RL training of LLM agents with verl and Agent Lightning, using the Calc-X example"
+description = "RL for LLMs from scratch: GRPO, production RL systems and agent training, built up and checked against verl and Agent Lightning"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
@@ -15,7 +15,7 @@ dependencies = [
     "httpx",
     "sympy",
     # notebooks
-    "azure-identity",  # rl_training_from_scratch §8.4: Entra ID auth for a hosted (Azure AI Foundry) LLM judge
+    "azure-identity",  # appendices: Entra ID auth for a hosted (Azure AI Foundry) LLM judge
     "ipykernel",
     "matplotlib",
     "pandas",

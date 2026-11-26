@@ -22,7 +22,11 @@ dependencies = [
     "pyarrow",
     "nbclient",
     "nbformat",
+    "ipywidgets>=8.1.9",  # so tqdm and Ray in the notebooks find it, instead of printing warnings
 ]
 
 [tool.uv]
 package = false
+# autogen-core pins protobuf~=5.29, but vLLM's tracing (via OpenTelemetry) needs protobuf 6: without this,
+# `from vllm import LLM` fails. The Calc-X agent runs fine on protobuf 6.
+override-dependencies = ["protobuf>=6.33.5,<7"]

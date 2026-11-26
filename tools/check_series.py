@@ -14,13 +14,13 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 SERIES = REPO / "tutorial/series"
-NOTEBOOK_1 = "grpo_manual.ipynb"  # the new notebook 1; becomes 1_grpo_from_scratch.ipynb when it replaces it
-NOTEBOOK_2 = "2_from_trainer_to_verl.ipynb"
+NOTEBOOK_1 = "grpo_manual.ipynb"  # article 1
+NOTEBOOK_2 = "rl_systems.ipynb"  # article 2
 MODULES = {  # module -> the notebook(s) that teach its code
     "arith_task.py": [NOTEBOOK_1],
-    "rl_core.py": [NOTEBOOK_1, NOTEBOOK_2],  # notebook 2 §2.3-§2.5 teaches vllm_generate, save_for_inference, push_weights, plot_histories
+    "rl_core.py": [NOTEBOOK_1, NOTEBOOK_2],  # notebook 2 §1-§2 teaches vllm_generate, save_for_inference, push_weights, rl_step
     "verl_core.py": [NOTEBOOK_2],
-    "recording_gateway.py": ["3_training_real_agents.ipynb"],
+    "recording_gateway.py": ["rl_agents.ipynb"],  # article 3
 }
 
 
